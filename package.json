@@ -1,0 +1,25 @@
+{
+  "name": "paper-electron",
+  "version": "1.0.0",
+  "description": "A simple Electron application",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "electron"
+  ],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "axios": "^1.6.7",
+    "xml2js": "^0.6.2",
+    "bootstrap": "^5.3.3"
+  },
+  "devDependencies": {
+    "electron": "^29.1.4",
+    "electron-builder": "^24.13.3",
+    "electron-reloader": "^1.2.3"
+  }
+}
