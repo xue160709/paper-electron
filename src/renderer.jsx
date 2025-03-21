@@ -11,6 +11,7 @@ import {
 } from '@ant-design/icons';
 import Settings from './components/Settings';
 import SearchSelector from './components/SearchSelector';
+import { loadAllJsonFiles, savePapersToJson } from './utils/fileUtils';
 import 'antd/dist/reset.css';
 
 const { Header, Content } = Layout;
@@ -165,7 +166,11 @@ const ArxivSearch = () => {
   const handleMultiSearch = async (selectedSearches) => {
     try {
       setLoading(true);
-      const newPapers = [];
+      
+      // 首先加载所有已存在的论文
+      const existingPapers = await loadAllJsonFiles();
+      setAllPapers(existingPapers);
+      setPapers(existingPapers);
       
       for (const search of selectedSearches) {
         const searchQuery = buildSearchQuery(search);
@@ -181,7 +186,7 @@ const ArxivSearch = () => {
         const entries = xmlDoc.getElementsByTagName('entry');
         
         const paperData = Array.from(entries).map((entry, index) => ({
-          key: `${search.name}-${index}`,
+          key: `${search.name}-${Date.now()}-${index}`,
           title: entry.getElementsByTagName('title')[0]?.textContent || '',
           authors: Array.from(entry.getElementsByTagName('author'))
             .map(author => author.getElementsByTagName('name')[0]?.textContent || '')
@@ -193,17 +198,18 @@ const ArxivSearch = () => {
           searchName: search.name || `保存的搜索 ${selectedSearches.indexOf(search) + 1}`
         }));
         
-        newPapers.push(...paperData);
+        // 保存新的论文到对应的JSON文件
+        const searchNameForFile = search.name || `保存的搜索_${selectedSearches.indexOf(search) + 1}`;
+        await savePapersToJson(paperData, searchNameForFile);
       }
       
-      // 保留临时搜索的结果
-      const tempPapers = allPapers.filter(paper => paper.searchName === '临时搜索');
-      const combinedPapers = [...tempPapers, ...newPapers];
-      const sortedPapers = combinedPapers.sort((a, b) => b.publishedTimestamp - a.publishedTimestamp);
+      // 重新加载所有论文并更新显示
+      const allPapers = await loadAllJsonFiles();
+      const sortedPapers = allPapers.sort((a, b) => b.publishedTimestamp - a.publishedTimestamp);
       
       setAllPapers(sortedPapers);
       setPapers(sortedPapers);
-      message.success(`共找到 ${newPapers.length} 篇论文`);
+      
     } catch (error) {
       console.error('获取论文数据时出错:', error);
       message.error('获取论文数据时出错，请稍后重试');
@@ -213,15 +219,170 @@ const ArxivSearch = () => {
   };
 
   useEffect(() => {
-    // 页面加载时自动执行所有保存的搜索
-    const saved = localStorage.getItem('savedSearches');
-    if (saved) {
-      const searches = JSON.parse(saved);
-      if (searches.length > 0) {
-        handleMultiSearch(searches);
+    const initializeData = async () => {
+      try {
+        // 页面加载时先加载所有已保存的论文
+        const existingPapers = await loadAllJsonFiles();
+        const sortedPapers = existingPapers.sort((a, b) => b.publishedTimestamp - a.publishedTimestamp);
+        setAllPapers(sortedPapers);
+        setPapers(sortedPapers);
+
+        // 然后自动执行所有保存的搜索
+        const saved = localStorage.getItem('savedSearches');
+        if (saved) {
+          const searches = JSON.parse(saved);
+          if (searches.length > 0) {
+            await handleMultiSearch(searches);
+          }
+        }
+      } catch (error) {
+        console.error('初始化数据时出错:', error);
+        message.error('加载已保存的论文时出错');
       }
-    }
+    };
+
+    initializeData();
   }, []);
+
+  const tabItems = [
+    {
+      key: 'search',
+      label: '搜索',
+      children: (
+        <>
+          <Card>
+            <Form
+              form={form}
+              onFinish={onFinish}
+              initialValues={{
+                conditions: [{ operator: 'AND', type: 'ti' }],
+                sortBy: 'submittedDate',
+                sortOrder: 'descending',
+                maxResults: 30
+              }}
+            >
+              <Form.List name="conditions">
+                {(fields, { add, remove }) => (
+                  <>
+                    {fields.map((field, index) => (
+                      <Space key={field.name} style={{ display: 'flex', marginBottom: 8 }} align="baseline">
+                        {index > 0 && (
+                          <Form.Item
+                            {...field}
+                            name={[field.name, 'operator']}
+                          >
+                            <Select style={{ width: 100 }}>
+                              <Option value="AND">AND</Option>
+                              <Option value="OR">OR</Option>
+                              <Option value="NOT">NOT</Option>
+                            </Select>
+                          </Form.Item>
+                        )}
+                        <Form.Item
+                          {...field}
+                          name={[field.name, 'type']}
+                        >
+                          <Select style={{ width: 120 }}>
+                            <Option value="ti">标题</Option>
+                            <Option value="au">作者</Option>
+                            <Option value="abs">摘要</Option>
+                            <Option value="cat">分类</Option>
+                            <Option value="all">全部</Option>
+                          </Select>
+                        </Form.Item>
+                        <Form.Item
+                          {...field}
+                          name={[field.name, 'term']}
+                          rules={[{ required: true, message: '请输入搜索关键词' }]}
+                        >
+                          <Input placeholder="输入搜索关键词" style={{ width: 300 }} />
+                        </Form.Item>
+                        {fields.length > 1 && (
+                          <MinusCircleOutlined onClick={() => remove(field.name)} />
+                        )}
+                      </Space>
+                    ))}
+                    <Form.Item>
+                      <Button
+                        type="dashed"
+                        onClick={() => add()}
+                        icon={<PlusOutlined />}
+                      >
+                        添加搜索条件
+                      </Button>
+                    </Form.Item>
+                  </>
+                )}
+              </Form.List>
+
+              <Space size="large">
+                <Form.Item
+                  name="sortBy"
+                  label="排序方式"
+                >
+                  <Select style={{ width: 160 }}>
+                    <Option value="submittedDate">提交日期</Option>
+                    <Option value="relevance">相关度</Option>
+                    <Option value="lastUpdatedDate">最后更新日期</Option>
+                  </Select>
+                </Form.Item>
+
+                <Form.Item
+                  name="sortOrder"
+                  label="排序顺序"
+                >
+                  <Select style={{ width: 160 }}>
+                    <Option value="descending">降序</Option>
+                    <Option value="ascending">升序</Option>
+                  </Select>
+                </Form.Item>
+
+                <Form.Item
+                  name="maxResults"
+                  label="结果数量"
+                >
+                  <InputNumber min={1} max={100} />
+                </Form.Item>
+
+                <Form.Item>
+                  <Space>
+                    <Button type="primary" htmlType="submit" loading={loading} icon={<SearchOutlined />}>
+                      搜索论文
+                    </Button>
+                    <Button 
+                      onClick={handleSaveSearch}
+                      icon={<SaveOutlined />}
+                    >
+                      保存搜索
+                    </Button>
+                  </Space>
+                </Form.Item>
+              </Space>
+            </Form>
+          </Card>
+
+          <Card style={{ marginTop: 16 }}>
+            <Table
+              columns={columns}
+              dataSource={papers}
+              loading={loading}
+              pagination={{ 
+                pageSize: 30,
+                showSizeChanger: true,
+                showQuickJumper: true,
+                pageSizeOptions: ['10', '30', '50', '100']
+              }}
+            />
+          </Card>
+        </>
+      )
+    },
+    {
+      key: 'settings',
+      label: '设置',
+      children: <Settings onApplySearch={handleApplySearch} activeTab={activeTab} />
+    }
+  ];
 
   return (
     <Layout className="layout" style={{ minHeight: '100vh' }}>
@@ -230,138 +391,8 @@ const ArxivSearch = () => {
       </Header>
       <Content style={{ padding: '24px' }}>
         <SearchSelector onSearch={handleMultiSearch} />
-        <Tabs activeKey={activeTab} onChange={setActiveTab}>
-          <TabPane tab="搜索" key="search">
-            <Card>
-              <Form
-                form={form}
-                onFinish={onFinish}
-                initialValues={{
-                  conditions: [{ operator: 'AND', type: 'ti' }],
-                  sortBy: 'submittedDate',
-                  sortOrder: 'descending',
-                  maxResults: 30
-                }}
-              >
-                <Form.List name="conditions">
-                  {(fields, { add, remove }) => (
-                    <>
-                      {fields.map((field, index) => (
-                        <Space key={field.key} style={{ display: 'flex', marginBottom: 8 }} align="baseline">
-                          {index > 0 && (
-                            <Form.Item
-                              {...field}
-                              name={[field.name, 'operator']}
-                            >
-                              <Select style={{ width: 100 }}>
-                                <Option value="AND">AND</Option>
-                                <Option value="OR">OR</Option>
-                                <Option value="NOT">NOT</Option>
-                              </Select>
-                            </Form.Item>
-                          )}
-                          <Form.Item
-                            {...field}
-                            name={[field.name, 'type']}
-                          >
-                            <Select style={{ width: 120 }}>
-                              <Option value="ti">标题</Option>
-                              <Option value="au">作者</Option>
-                              <Option value="abs">摘要</Option>
-                              <Option value="cat">分类</Option>
-                              <Option value="all">全部</Option>
-                            </Select>
-                          </Form.Item>
-                          <Form.Item
-                            {...field}
-                            name={[field.name, 'term']}
-                            rules={[{ required: true, message: '请输入搜索关键词' }]}
-                          >
-                            <Input placeholder="输入搜索关键词" style={{ width: 300 }} />
-                          </Form.Item>
-                          {fields.length > 1 && (
-                            <MinusCircleOutlined onClick={() => remove(field.name)} />
-                          )}
-                        </Space>
-                      ))}
-                      <Form.Item>
-                        <Button
-                          type="dashed"
-                          onClick={() => add()}
-                          icon={<PlusOutlined />}
-                        >
-                          添加搜索条件
-                        </Button>
-                      </Form.Item>
-                    </>
-                  )}
-                </Form.List>
-
-                <Space size="large">
-                  <Form.Item
-                    name="sortBy"
-                    label="排序方式"
-                  >
-                    <Select style={{ width: 160 }}>
-                      <Option value="submittedDate">提交日期</Option>
-                      <Option value="relevance">相关度</Option>
-                      <Option value="lastUpdatedDate">最后更新日期</Option>
-                    </Select>
-                  </Form.Item>
-
-                  <Form.Item
-                    name="sortOrder"
-                    label="排序顺序"
-                  >
-                    <Select style={{ width: 160 }}>
-                      <Option value="descending">降序</Option>
-                      <Option value="ascending">升序</Option>
-                    </Select>
-                  </Form.Item>
-
-                  <Form.Item
-                    name="maxResults"
-                    label="结果数量"
-                  >
-                    <InputNumber min={1} max={100} />
-                  </Form.Item>
-
-                  <Form.Item>
-                    <Space>
-                      <Button type="primary" htmlType="submit" loading={loading} icon={<SearchOutlined />}>
-                        搜索论文
-                      </Button>
-                      <Button 
-                        onClick={handleSaveSearch}
-                        icon={<SaveOutlined />}
-                      >
-                        保存搜索
-                      </Button>
-                    </Space>
-                  </Form.Item>
-                </Space>
-              </Form>
-            </Card>
-
-            <Card style={{ marginTop: 16 }}>
-              <Table
-                columns={columns}
-                dataSource={papers}
-                loading={loading}
-                pagination={{ 
-                  pageSize: 30,
-                  showSizeChanger: true,
-                  showQuickJumper: true,
-                  pageSizeOptions: ['10', '30', '50', '100']
-                }}
-              />
-            </Card>
-          </TabPane>
-          <TabPane tab="设置" key="settings">
-            <Settings onApplySearch={handleApplySearch} activeTab={activeTab} />
-          </TabPane>
-        </Tabs>
-
+        <Tabs activeKey={activeTab} onChange={setActiveTab} items={tabItems} />
+        
         <Modal
           title="保存搜索条件"
           open={saveModalVisible}

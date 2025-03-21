@@ -5,13 +5,13 @@ module.exports = {
   entry: './src/renderer.jsx',
   target: 'electron-renderer',
   output: {
-    path: path.resolve(__dirname, 'dist'),
     filename: 'renderer.bundle.js',
+    path: path.resolve(__dirname, 'dist'),
   },
   module: {
     rules: [
       {
-        test: /\.(js|jsx)$/,
+        test: /\.jsx?$/,
         exclude: /node_modules/,
         use: {
           loader: 'babel-loader',
@@ -29,5 +29,10 @@ module.exports = {
   resolve: {
     extensions: ['.js', '.jsx']
   },
-  devtool: 'source-map'
+  devServer: {
+    static: {
+      directory: path.join(__dirname, 'dist'),
+    },
+    port: 3000,
+  }
 }; 
