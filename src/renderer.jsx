@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { createRoot } from 'react-dom/client';
 import { 
   Layout, Card, Form, Select, Input, Button, Table, Space, 
@@ -10,6 +10,7 @@ import {
   SaveOutlined, SettingOutlined
 } from '@ant-design/icons';
 import Settings from './components/Settings';
+import SearchSelector from './components/SearchSelector';
 import 'antd/dist/reset.css';
 
 const { Header, Content } = Layout;
@@ -24,8 +25,15 @@ const ArxivSearch = () => {
   const [saveModalVisible, setSaveModalVisible] = useState(false);
   const [searchName, setSearchName] = useState('');
   const [activeTab, setActiveTab] = useState('search');
+  const [allPapers, setAllPapers] = useState([]);
 
   const columns = [
+    {
+      title: '搜索条件',
+      dataIndex: 'searchName',
+      key: 'searchName',
+      width: 150,
+    },
     {
       title: '标题',
       dataIndex: 'title',
@@ -94,22 +102,30 @@ const ArxivSearch = () => {
       
       if (entries.length === 0) {
         message.info('未找到相关论文');
-        setPapers([]);
         return;
       }
       
       const paperData = Array.from(entries).map((entry, index) => ({
-        key: index,
+        key: `temp-${Date.now()}-${index}`,
         title: entry.getElementsByTagName('title')[0]?.textContent || '',
         authors: Array.from(entry.getElementsByTagName('author'))
           .map(author => author.getElementsByTagName('name')[0]?.textContent || '')
           .join(', '),
         published: new Date(entry.getElementsByTagName('published')[0]?.textContent || '').toLocaleDateString('zh-CN'),
+        publishedTimestamp: new Date(entry.getElementsByTagName('published')[0]?.textContent || '').getTime(),
         summary: entry.getElementsByTagName('summary')[0]?.textContent || '',
         link: entry.getElementsByTagName('id')[0]?.textContent || '',
+        searchName: '临时搜索'
       }));
       
-      setPapers(paperData);
+      // 保留现有的搜索结果，只添加新的临时搜索结果
+      const existingTempPapers = allPapers.filter(paper => !paper.searchName.startsWith('临时搜索'));
+      const combinedPapers = [...existingTempPapers, ...paperData];
+      const sortedPapers = combinedPapers.sort((a, b) => b.publishedTimestamp - a.publishedTimestamp);
+      
+      setAllPapers(sortedPapers);
+      setPapers(sortedPapers);
+      message.success(`找到 ${paperData.length} 篇相关论文`);
     } catch (error) {
       console.error('获取论文数据时出错:', error);
       message.error('获取论文数据时出错，请稍后重试');
@@ -146,12 +162,74 @@ const ArxivSearch = () => {
     setActiveTab('search');
   };
 
+  const handleMultiSearch = async (selectedSearches) => {
+    try {
+      setLoading(true);
+      const newPapers = [];
+      
+      for (const search of selectedSearches) {
+        const searchQuery = buildSearchQuery(search);
+        if (!searchQuery) continue;
+
+        const apiUrl = `http://export.arxiv.org/api/query?search_query=${encodeURIComponent(searchQuery)}&sortBy=${search.sortBy}&sortOrder=${search.sortOrder}&start=0&max_results=${search.maxResults}`;
+        
+        const response = await fetch(apiUrl);
+        const xmlText = await response.text();
+        
+        const parser = new DOMParser();
+        const xmlDoc = parser.parseFromString(xmlText, 'text/xml');
+        const entries = xmlDoc.getElementsByTagName('entry');
+        
+        const paperData = Array.from(entries).map((entry, index) => ({
+          key: `${search.name}-${index}`,
+          title: entry.getElementsByTagName('title')[0]?.textContent || '',
+          authors: Array.from(entry.getElementsByTagName('author'))
+            .map(author => author.getElementsByTagName('name')[0]?.textContent || '')
+            .join(', '),
+          published: new Date(entry.getElementsByTagName('published')[0]?.textContent || '').toLocaleDateString('zh-CN'),
+          publishedTimestamp: new Date(entry.getElementsByTagName('published')[0]?.textContent || '').getTime(),
+          summary: entry.getElementsByTagName('summary')[0]?.textContent || '',
+          link: entry.getElementsByTagName('id')[0]?.textContent || '',
+          searchName: search.name || `保存的搜索 ${selectedSearches.indexOf(search) + 1}`
+        }));
+        
+        newPapers.push(...paperData);
+      }
+      
+      // 保留临时搜索的结果
+      const tempPapers = allPapers.filter(paper => paper.searchName === '临时搜索');
+      const combinedPapers = [...tempPapers, ...newPapers];
+      const sortedPapers = combinedPapers.sort((a, b) => b.publishedTimestamp - a.publishedTimestamp);
+      
+      setAllPapers(sortedPapers);
+      setPapers(sortedPapers);
+      message.success(`共找到 ${newPapers.length} 篇论文`);
+    } catch (error) {
+      console.error('获取论文数据时出错:', error);
+      message.error('获取论文数据时出错，请稍后重试');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    // 页面加载时自动执行所有保存的搜索
+    const saved = localStorage.getItem('savedSearches');
+    if (saved) {
+      const searches = JSON.parse(saved);
+      if (searches.length > 0) {
+        handleMultiSearch(searches);
+      }
+    }
+  }, []);
+
   return (
     <Layout className="layout" style={{ minHeight: '100vh' }}>
       <Header style={{ background: '#fff', padding: '0 24px' }}>
         <Title level={2} style={{ margin: '16px 0' }}>ArXiv论文搜索</Title>
       </Header>
       <Content style={{ padding: '24px' }}>
+        <SearchSelector onSearch={handleMultiSearch} />
         <Tabs activeKey={activeTab} onChange={setActiveTab}>
           <TabPane tab="搜索" key="search">
             <Card>
@@ -270,10 +348,11 @@ const ArxivSearch = () => {
                 columns={columns}
                 dataSource={papers}
                 loading={loading}
-                pagination={{
-                  defaultPageSize: 10,
+                pagination={{ 
+                  pageSize: 30,
                   showSizeChanger: true,
                   showQuickJumper: true,
+                  pageSizeOptions: ['10', '30', '50', '100']
                 }}
               />
             </Card>
