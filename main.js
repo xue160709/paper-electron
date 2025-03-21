@@ -21,6 +21,9 @@ function createWindow () {
 
   win.loadFile('index.html')
   
+  // 打开开发者工具
+  win.webContents.openDevTools()
+  
   // 在默认浏览器中打开外部链接
   win.webContents.setWindowOpenHandler(({ url }) => {
     shell.openExternal(url);

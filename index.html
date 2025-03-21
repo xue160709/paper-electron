@@ -4,97 +4,18 @@
     <meta charset="UTF-8">
     <title>ArXiv论文搜索</title>
     <meta http-equiv="Content-Security-Policy" content="script-src 'self' 'unsafe-inline';" />
-    <link href="node_modules/bootstrap/dist/css/bootstrap.min.css" rel="stylesheet">
     <style>
-        .search-condition {
-            background: #f8f9fa;
-            padding: 10px;
-            margin-bottom: 10px;
-            border-radius: 5px;
-        }
-        .remove-condition {
-            cursor: pointer;
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial,
+                'Noto Sans', sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol',
+                'Noto Color Emoji';
         }
     </style>
 </head>
-<body class="container mt-4">
-    <h1 class="mb-4">ArXiv论文搜索</h1>
-    
-    <div class="card mb-4">
-        <div class="card-body">
-            <form id="searchForm">
-                <div id="searchConditions">
-                    <div class="search-condition row g-3">
-                        <div class="col-md-4">
-                            <select class="form-select search-type">
-                                <option value="ti">标题</option>
-                                <option value="au">作者</option>
-                                <option value="abs">摘要</option>
-                                <option value="cat">分类</option>
-                                <option value="all">全部</option>
-                            </select>
-                        </div>
-                        <div class="col-md-7">
-                            <input type="text" class="form-control search-term" placeholder="输入搜索关键词">
-                        </div>
-                        <div class="col-md-1">
-                            <span class="btn btn-outline-danger remove-condition">&times;</span>
-                        </div>
-                    </div>
-                </div>
-                
-                <div class="row mb-3">
-                    <div class="col-12">
-                        <button type="button" id="addCondition" class="btn btn-outline-primary">
-                            添加搜索条件
-                        </button>
-                    </div>
-                </div>
-
-                <div class="row g-3">
-                    <div class="col-md-4">
-                        <label class="form-label">排序方式</label>
-                        <select id="sortBy" class="form-select">
-                            <option value="submittedDate">提交日期</option>
-                            <option value="relevance">相关度</option>
-                            <option value="lastUpdatedDate">最后更新日期</option>
-                        </select>
-                    </div>
-                    <div class="col-md-4">
-                        <label class="form-label">排序顺序</label>
-                        <select id="sortOrder" class="form-select">
-                            <option value="descending">降序</option>
-                            <option value="ascending">升序</option>
-                        </select>
-                    </div>
-                    <div class="col-md-4">
-                        <label class="form-label">结果数量</label>
-                        <input type="number" id="maxResults" class="form-control" value="30" min="1" max="100">
-                    </div>
-                    <div class="col-12">
-                        <button type="submit" class="btn btn-primary">搜索论文</button>
-                    </div>
-                </div>
-            </form>
-        </div>
-    </div>
-
-    <div class="table-responsive">
-        <table class="table table-striped">
-            <thead>
-                <tr>
-                    <th>标题</th>
-                    <th>作者</th>
-                    <th>发布日期</th>
-                    <th>摘要</th>
-                    <th>链接</th>
-                </tr>
-            </thead>
-            <tbody id="papersTableBody">
-            </tbody>
-        </table>
-    </div>
-
-    <script src="renderer.js"></script>
+<body>
+    <div id="root"></div>
+    <script src="dist/renderer.bundle.js"></script>
 </body>
 </html> 
