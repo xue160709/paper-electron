@@ -6,7 +6,7 @@
   "scripts": {
     "start": "webpack && electron .",
     "build": "webpack --mode production",
-    "dev": "webpack --watch",
+    "dev": "concurrently \"webpack --watch\" \"electron .\"",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [
@@ -26,6 +26,7 @@
     "@babel/core": "^7.24.0",
     "@babel/preset-react": "^7.23.3",
     "babel-loader": "^9.1.3",
+    "concurrently": "^8.2.2",
     "css-loader": "^6.10.0",
     "electron": "^29.1.4",
     "electron-builder": "^24.13.3",
